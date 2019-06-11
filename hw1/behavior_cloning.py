@@ -44,7 +44,6 @@ class BehaviorCloning():
         keep_prob = self.config.bc.keep_prob
         
         # check point configrations
-        checkpoint_step = self.config.bc.checkpoint_step
         checkpoint_dir = self.config.bc.checkpoint_dir
         
         # load expert data
@@ -78,13 +77,14 @@ class BehaviorCloning():
                 return
             
             # Training cycle
+            self.num_timesteps = self.x_train.shape[0]
+            num_steps = self.num_timesteps // batch_size
+            epoch = 1
+            global_step = 1
+            early_stop = self.reset_early_stop()
             loss_list = []
             v_loss_list = []
             last_v_loss = 0
-            early_stop = self.reset_early_stop()
-            global_step = 1
-            epoch = 1
-
             while epoch <= epochs:
                 print('epoch ', epoch)
                 self.x_train, self.y_train = \
@@ -124,16 +124,7 @@ class BehaviorCloning():
                         
                         v_loss_list.append(v_loss)
                         if early_stop : break
-                        
-                    # Save Model
-                    """
-                    if global_step % checkpoint_step == 0:
-                        self.model.save(sess,
-                                        checkpoint_dir,
-                                        self.envname,
-                                        global_step,
-                                        imitation_mode)
-                    """
+
                     global_step += 1
                 
                 if early_stop : break
@@ -142,6 +133,8 @@ class BehaviorCloning():
                 epochs = self.check_epochs(epochs, epoch, loss)
                 if imitation_mode == ImitationMode.DAgger:
                     self.add_experience(sess, expert_data_loader)
+                    self.num_timesteps = self.x_train.shape[0]
+                    num_steps = self.num_timesteps // batch_size
 
             print("step " + str(global_step) + \
                   ", train loss " + "{:.5f}".format(loss) + \
@@ -337,10 +330,18 @@ class BehaviorCloning():
                                          num_rollouts,
                                          False)
         experience = self.ask_to_expert(experience)
+        
+        self.x_train = np.concatenate((self.x_train,
+                                       experience['observations']))
+        
+        self.y_train = np.concatenate((self.y_train,
+                                       experience['actions']))
+        '''
         self.x_train, self.y_train, \
         self.x_valid, self.y_valid, \
         self.x_test, self.y_test = \
             expert_data_loader.add_experience(experience)
+        '''
 
     def ask_to_expert(self, experience):
         # expert policy

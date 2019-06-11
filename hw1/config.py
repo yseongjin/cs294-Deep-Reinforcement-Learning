@@ -57,7 +57,7 @@ class Config():
         # Behavior Cloning Parameters
         self.bc = EasyDict()
         self.bc.envname = 'Walker2d-v2'
-        self.bc.imitation_mode = ImitationMode.DAgger # bc, DAgger
+        self.bc.imitation_mode = ImitationMode.bc # bc, DAgger
 
         
         # train policy
