@@ -1,0 +1,6 @@
+Sun Dec 16 22:57:20 2018
+ERROR: Could not open activation key file C:\Users\Fermi_2\.mujoco\mjkey.txt
+
+Wed Dec 19 08:41:29 2018
+ERROR: Invalid text in activation key
+

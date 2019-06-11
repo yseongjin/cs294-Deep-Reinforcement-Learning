@@ -1,0 +1,11 @@
+.ipynb_checkpoints
+__pycache__
+util/__pycache__
+model/__pycache__
+
+expert_data
+expert_data*
+logs
+ckpt
+
+*.un~
