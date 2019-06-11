@@ -8,12 +8,21 @@ from enum import Enum
 # ----------------------------------------------------------------------------
 # Enumeration Classes
 class ModelInit(Enum):
-    """Mode classes."""
+    """ModelInit classes."""
 
     new = 1
     restore_train = 2
     restore_test = 3
+    
+class ImitationMode(Enum):
+    """ImitationMode classes."""
 
+    bc = 1
+    DAgger = 2        
+
+imitation_mode_str = {ImitationMode.bc: 'bc',
+                      ImitationMode.DAgger: 'DAgger'}
+        
 def normalize(x):
     
     x_mean = x.mean(axis=0)

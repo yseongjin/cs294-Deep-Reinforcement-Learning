@@ -6,6 +6,7 @@ This module includes Config class.
 # Convenience class that behaves exactly like dict(), but allows accessing
 # the keys and values using the attribute syntax, i.e., "mydict.key = value".
 from util.util import ModelInit
+from util.util import ImitationMode
 
 class EasyDict(dict):
     """Custom dictionary class for configuration."""
@@ -32,6 +33,7 @@ class Config():
 
     def __init__(self):
         """Initialize all configuration variables."""
+        
         # Environment Parameters
         self.environment = EasyDict()
         self.environment.envlist = ['Ant-v2',
@@ -42,10 +44,21 @@ class Config():
                                     'Walker2d-v2']
         self.environment.rolloutlist = [250, 250, 250, 250, 250, 250]
         self.environment.max_timesteps = 5000
+        
+        # Model Parameters
+        self.model = EasyDict()
+        self.model.hidden_list = {'Ant-v2': [64, 32], # 11 obs, 8 actions
+                                  'HalfCheetah-v2': [64, 32], # 17 obs, 6 actions
+                                  'Hopper-v2': [64, 32], # 11 obs, 3 actions
+                                  'Humanoid-v2': [200, 100], # 376 obs, 17 actions
+                                  'Reacher-v2': [64, 32], # 11 obs, 2 actions
+                                  'Walker2d-v2': [64, 32]} # 11 obs, 2 actions
 
         # Behavior Cloning Parameters
         self.bc = EasyDict()
-        self.bc.envname = 'Hopper-v2'
+        self.bc.envname = 'Walker2d-v2'
+        self.bc.imitation_mode = ImitationMode.DAgger # bc, DAgger
+
         
         # train policy
         self.bc.epochs = 30
@@ -60,10 +73,10 @@ class Config():
         self.bc.test_display_step = 100
         self.bc.num_rollouts = 10
         self.bc.max_steps = 3000
-        
+
         # early stop
-        self.bc.early_stop_threshold = 51e-3
-        self.bc.early_stop_count_threshold = 5
+        self.bc.early_stop_threshold = 51e-5
+        self.bc.early_stop_count_threshold = 10
         self.bc.loss_convergence_threshold = 5e-3
         
         # checkpoint save/restore
@@ -74,13 +87,4 @@ class Config():
         
         # tensorboard file writer
         self.bc.log_dir = './logs/'
-
-        # Model Parameters
-        self.model = EasyDict()
-        self.model.hidden_list = {'Ant-v2': [64, 32], # 11 obs, 8 actions
-                                  'HalfCheetah-v2': [64, 32], # 17 obs, 6 actions
-                                  'Hopper-v2': [64, 32], # 11 obs, 3 actions
-                                  'Humanoid-v2': [200, 100], # 376 obs, 17 actions
-                                  'Reacher-v2': [64, 32], # 11 obs, 2 actions
-                                  'Walker2d-v2': [64, 32]} # 11 obs, 2 actions
 

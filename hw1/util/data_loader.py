@@ -6,7 +6,7 @@ import util.util as util
 class DataLoader():
         
     def load(self, envname):
-        
+        self.envname = envname
         filename = os.path.join('expert_data', envname + '.pkl')
 
         with open(filename, 'rb') as f:
@@ -19,7 +19,32 @@ class DataLoader():
             self.return_std = np.std(self.returns)
             assert self.observations.shape[0] == self.actions.shape[0]
             
-        print('Environment :', envname)
+        print('Environment :', self.envname)
+        print('- num of timesteps :', self.observations.shape[0])
+        print('- num of features :', self.observations.shape[1])
+        print('- num of actions :', self.actions.shape[1])
+        
+        # random shuffle traning set
+        self.observations, self.actions = \
+            util.shuffle_dataset(self.observations, self.actions)
+        
+        return util.split_dataset(self.observations, self.actions)
+    
+    def add_experience(self, experience):
+        self.observations = np.concatenate((self.observations,
+                                            experience['observations']))
+        
+        self.actions = np.concatenate((self.actions,
+                                       experience['actions']))
+        
+        self.returns = np.concatenate((self.returns,
+                                       experience['returns']))
+        
+        self.return_mean = np.mean(self.returns)
+        self.return_std = np.std(self.returns)
+        assert self.observations.shape[0] == self.actions.shape[0]
+            
+        print('Environment :', self.envname)
         print('- num of timesteps :', self.observations.shape[0])
         print('- num of features :', self.observations.shape[1])
         print('- num of actions :', self.actions.shape[1])

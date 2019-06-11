@@ -1,5 +1,7 @@
 import os
 import tensorflow as tf
+from util.util import ImitationMode
+import util.util as util
 
 class Model():
         
@@ -92,20 +94,29 @@ class Model():
              sess,
              checkpoint_dir,
              model_name,
-             global_step, 
-             write_meta_graph=False):
+             global_step,
+             imitation_mode=ImitationMode.bc):
 
         # create checkpoint directory
+        imitation_mode_str = util.imitation_mode_str[imitation_mode]
+        checkpoint_dir = os.path.join(checkpoint_dir, imitation_mode_str)
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
-        
+            
+        save_path = os.path.join(checkpoint_dir, model_name)
         # save checkpoint file
         self.saver.save(sess, 
-                        checkpoint_dir + model_name,
+                        save_path,
                         global_step)
 
-
-    def restore(self, sess, checkpoint_dir, restore_file):
+    def restore(self, sess,
+                checkpoint_dir,
+                restore_file,
+                imitation_mode=ImitationMode.bc):
+        
+        # checkpoint directory
+        imitation_mode_str = util.imitation_mode_str[imitation_mode]
+        checkpoint_dir = os.path.join(checkpoint_dir, imitation_mode_str)
         
         # import model graph
         metafile_path = os.path.join(checkpoint_dir, restore_file)

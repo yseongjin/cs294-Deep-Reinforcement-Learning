@@ -9,16 +9,34 @@ import gym
 from util.data_loader import DataLoader
 from model.model import Model
 from util.util import ModelInit
+from util.util import ImitationMode
+from expert import Expert
 import util.util as util
 
 class BehaviorCloning():
+    """Behavior Cloning Classes.
+
+    Attributes:
+        config : configuration object
+        envname : environment name
+
+    """
     
     def __init__(self, config):
         self.config = config
         self.envname = config.bc.envname
+        self.expert = None
 
-    def train(self):
-        
+    def train(self, imitation_mode = ImitationMode.bc):
+        """Training for Behavior Cloning
+
+        1. Set hyper parameters
+        2. Load the expert data
+        3. Calculate the number of features and actions
+        4. Create the Behavior Cloning model
+        5. Train the Behavior Cloning model
+
+        """
         # Hyper parameters
         epochs = self.config.bc.epochs
         batch_size = self.config.bc.batch_size
@@ -36,19 +54,23 @@ class BehaviorCloning():
         self.x_valid, self.y_valid, \
         self.x_test, self.y_test = expert_data_loader.load(self.envname)      
 
-        # calculate the number of neuraon for each layer
-        num_timesteps, num_features =  self.x_train.shape
-        num_actions =  self.y_train.shape[1]
+        # calculate the number of features and actions
+        self.num_features =  self.x_train.shape[1]
+        self.num_actions =  self.y_train.shape[1]
 
         # Training Phase
         print('Training...')
         with tf.Session() as sess:
             # tensorboard logger
-            self.tb_logger = self.get_tb_logger(sess, self.envname)
+            self.tb_logger = self.get_tb_logger(sess,
+                                                self.envname,
+                                                imitation_mode)
 
             # build model
-            self.model, continue_train = \
-                self.create_model(sess, num_features, num_actions)
+            self.model, continue_train = self.create_model(sess,
+                                                           self.num_features,
+                                                           self.num_actions, 
+                                                           imitation_mode)
             
             # if not necessary to train the model, do test
             if not continue_train: 
@@ -56,7 +78,6 @@ class BehaviorCloning():
                 return
             
             # Training cycle
-            num_steps = num_timesteps // batch_size
             loss_list = []
             v_loss_list = []
             last_v_loss = 0
@@ -69,6 +90,8 @@ class BehaviorCloning():
                 self.x_train, self.y_train = \
                     util.shuffle_dataset(self.x_train, self.y_train)
                 
+                self.num_timesteps = self.x_train.shape[0]
+                num_steps = self.num_timesteps // batch_size
                 # mini batch iterations
                 for step in range(0, num_steps):
                     start_idx = step*batch_size
@@ -85,9 +108,6 @@ class BehaviorCloning():
                                                                  self.x_valid,
                                                                  self.y_valid)
 
-                        # early stopping
-                        early_stop = self.check_early_stop(v_loss, last_v_loss)
-
                         print("step " + str(global_step) + \
                               ", train loss " + "{:.5f}".format(loss) + \
                               ", validation loss " + "{:.5f}".format(v_loss))
@@ -96,24 +116,32 @@ class BehaviorCloning():
                         self.tb_logger.add_summary(log_loss, global_step)  
                         self.tb_logger.add_summary(log_v_loss, global_step)  
 
+                        # early stopping
+                        early_stop = self.check_early_stop(v_loss, last_v_loss)
                         # make loss list for plotting
                         last_v_loss = v_loss
                         loss_list.append(loss)
+                        
                         v_loss_list.append(v_loss)
+                        if early_stop : break
                         
                     # Save Model
+                    """
                     if global_step % checkpoint_step == 0:
                         self.model.save(sess,
                                         checkpoint_dir,
                                         self.envname,
-                                        global_step)
-                    if early_stop : break
+                                        global_step,
+                                        imitation_mode)
+                    """
                     global_step += 1
                 
                 if early_stop : break
                 epoch += 1
                 # if loss is greater than the threshold, increase # epochs
                 epochs = self.check_epochs(epochs, epoch, loss)
+                if imitation_mode == ImitationMode.DAgger:
+                    self.add_experience(sess, expert_data_loader)
 
             print("step " + str(global_step) + \
                   ", train loss " + "{:.5f}".format(loss) + \
@@ -124,7 +152,7 @@ class BehaviorCloning():
                             checkpoint_dir,
                             self.envname,
                             global_step,
-                            True)
+                            imitation_mode)
 
             # show loss plot
             self.show_train_graph(loss_list, v_loss_list)
@@ -132,7 +160,10 @@ class BehaviorCloning():
             # test policy
             self.test(sess, expert_data_loader)
 
-    def create_model(self, sess, num_features, num_actions):
+    def create_model(self, sess,
+                     num_features,
+                     num_actions,
+                     imitation_mode = ImitationMode.bc):
         
         # model configuratoin
         learning_rate = self.config.bc.learning_rate
@@ -157,11 +188,11 @@ class BehaviorCloning():
             sess.run(tf.global_variables_initializer())
             
         elif restore == ModelInit.restore_test:
-            model.restore(sess, checkpoint_dir, restore_file)
+            model.restore(sess, checkpoint_dir, restore_file, imitation_mode)
             continue_train = False
             
         elif restore == ModelInit.restore_train:
-            model.restore(sess, checkpoint_dir, restore_file)
+            model.restore(sess, checkpoint_dir, restore_file, imitation_mode)
             # need to develop training from restored time steps
         
         return model, continue_train
@@ -201,6 +232,8 @@ class BehaviorCloning():
                       "early_stop_count", self.early_stop_count)
                 return True
             
+            return False
+            
         return self.reset_early_stop()     
         
     def check_epochs(self, epochs, epoch, loss):
@@ -213,10 +246,11 @@ class BehaviorCloning():
             
         return epochs
 
-    def get_tb_logger(self, sess, envname, bc_type='bc'):
+    def get_tb_logger(self, sess, envname, imitation_mode=ImitationMode.bc):
 
         log_dir = self.config.bc.log_dir
-        log_path = os.path.join(log_dir, envname, bc_type)
+        imitation_mode_str = util.imitation_mode_str[imitation_mode]
+        log_path = os.path.join(log_dir, envname, imitation_mode_str)
         if not os.path.exists(log_path):
             os.makedirs(log_path)
             
@@ -228,13 +262,15 @@ class BehaviorCloning():
         # rollout bc policy
         num_rollouts = self.config.bc.num_rollouts
         max_steps = self.config.bc.max_steps
-        experience = self.rollout_bc_policy(sess,
-                                                 self.envname,
-                                                 max_steps,
-                                                 num_rollouts)
+        experience = self.rollout_policy(sess,
+                                         self.envname,
+                                         max_steps,
+                                         num_rollouts)
         
         self.summary_returns(expert_data_loader.returns, "Expert")
-        self.summary_returns(experience['returns'], "Behavior Cloning")
+        self.summary_returns(experience['returns'], "Imitation Learning")
+        
+        return experience
 
     def test_policy(self, sess):
         print('Testing...')
@@ -263,14 +299,14 @@ class BehaviorCloning():
                 self.tb_logger.add_summary(log_test_loss, step)  
                 loss_list.append(loss)
             
-    def rollout_bc_policy(self, sess, envname, max_steps, num_rollouts=10, render=True):
+    def rollout_policy(self, sess, envname, max_steps, num_rollouts=10, render=True):
         observations = []
         actions = []
         returns = []
         
         env = gym.make(envname)
         for i in range(num_rollouts):
-            print('iter', i)
+            if render: print('iter', i)
             obs = env.reset()
             done = False
             totalr = 0.
@@ -290,7 +326,43 @@ class BehaviorCloning():
                       'actions': np.array(np.squeeze(actions)),
                       'returns':np.array(returns)}
         return experience
+    
+    def add_experience(self, sess, expert_data_loader):
+        # rollout policy
+        num_rollouts = self.config.bc.num_rollouts
+        max_steps = self.config.bc.max_steps
+        experience = self.rollout_policy(sess,
+                                         self.envname,
+                                         max_steps,
+                                         num_rollouts,
+                                         False)
+        experience = self.ask_to_expert(experience)
+        self.x_train, self.y_train, \
+        self.x_valid, self.y_valid, \
+        self.x_test, self.y_test = \
+            expert_data_loader.add_experience(experience)
 
+    def ask_to_expert(self, experience):
+        # expert policy
+        if self.expert == None:
+            self.expert = Expert(self.config)
+            self.policy_fn = self.expert.load_expert_policy(self.envname)
+
+        batch_size = self.config.bc.batch_size
+        observations = experience['observations']
+        actions = experience['actions']
+        num_timesteps = observations.shape[0]
+        num_steps = num_timesteps // batch_size
+        
+        for step in range(0, num_steps):
+            start_idx = step*batch_size
+            end_idx = (step+1)*batch_size
+            actions[start_idx:end_idx] = \
+               self. policy_fn(observations[start_idx:end_idx, :])
+        
+        experience['actions'] = actions       
+        return experience
+    
 if __name__ == '__main__':
     begin_time = datetime.datetime.now()
     
@@ -298,7 +370,7 @@ if __name__ == '__main__':
     
     # read expert data
     bc = BehaviorCloning(cfg)
-    policy_fn = bc.train()
+    bc.train(cfg.bc.imitation_mode)
 
     end_time = datetime.datetime.now()           
     print()
