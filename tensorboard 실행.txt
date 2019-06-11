@@ -1,4 +1,0 @@
-tensorboard --logdir=C:\sjyoon\homework\cs294\hw1\logs\Ant-v2\bc
-http://localhost:6006
-
-TensorBoard 1.12.2 at http://DESKTOP-OA8CLIT:6006 (Press CTRL+C to quit)
